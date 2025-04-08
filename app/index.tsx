@@ -62,7 +62,7 @@ export default function ImporaUploadScreen() {
           name: "photo.jpg",
           type: "image/jpeg",
         };
-        formData.append("file", imageInfo as any);
+        formData.append("image", imageInfo as any);
 
         const endpoint =
           "https://impora-hausnotruf.de/wp-json/app-api/v1/upload-image";
@@ -79,7 +79,9 @@ export default function ImporaUploadScreen() {
           body: formData,
         });
 
+        console.log("response", uploadResponse);
         if (!uploadResponse.ok) {
+
           throw new Error(`Image upload failed: ${uploadResponse.status}`);
         }
 
@@ -87,15 +89,19 @@ export default function ImporaUploadScreen() {
         uploadedImageLink = uploadResult.url;
       }
 
-      const webhookResponse = await fetch("https://example-webhook.com", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          number: numberValue,
-          qrCode: qrValue,
-          imageLink: uploadedImageLink,
-        }),
-      });
+      const webhookResponse = await fetch(
+        "https://hook.eu1.make.com/iwhcukw7w37ttjaa8c02oikgyo3wsh16",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            number: numberValue,
+            qrCode: qrValue,
+            imageLink: uploadedImageLink,
+          }),
+        }
+      );
+      // console.log("webhookResponse", webhookResponse);
 
       if (!webhookResponse.ok) {
         throw new Error(`Webhook request failed: ${webhookResponse.status}`);
