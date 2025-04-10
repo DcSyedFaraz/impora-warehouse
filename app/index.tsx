@@ -23,7 +23,6 @@ export default function ImporaUploadScreen() {
   const [modalMessage, setModalMessage] = useState("");
   const [modalHeading, setModalHeading] = useState("");
 
-
   // Function to take a photo using the device camera
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -39,8 +38,11 @@ export default function ImporaUploadScreen() {
       quality: 1,
     });
 
+    console.log("result", result, result.assets);
+
     if (!result.canceled && result.assets && result.assets.length > 0) {
       setImageUri(result.assets[0].uri);
+      console.log("imageUri ", result.assets[0].uri, imageUri);
     }
   };
 
@@ -89,6 +91,7 @@ export default function ImporaUploadScreen() {
           type: "image/jpeg",
         };
         formData.append("image", imageInfo as any);
+        console.log("formData", formData);
 
         const endpoint =
           "https://impora-hausnotruf.de/wp-json/app-api/v1/upload-image";
@@ -113,6 +116,8 @@ export default function ImporaUploadScreen() {
         const uploadResult = await uploadResponse.json();
         uploadedImageLink = uploadResult.url;
       }
+      // console.log("uploadedImageLink", uploadedImageLink);
+      // console.log("imageUri", imageUri);
 
       const webhookResponse = await fetch(
         "https://hook.eu1.make.com/iwhcukw7w37ttjaa8c02oikgyo3wsh16",
@@ -226,13 +231,13 @@ export default function ImporaUploadScreen() {
                 </View>
               ) : (
                 <View style={styles.buttonRow}>
-                  <TouchableOpacity
+                  {/* <TouchableOpacity
                     style={styles.uploadButton}
                     onPress={pickImage}
                   >
                     <Ionicons name="image-outline" size={28} color="#3E7BFA" />
                     <Text style={styles.uploadButtonText}>From Gallery</Text>
-                  </TouchableOpacity>
+                  </TouchableOpacity> */}
                   <TouchableOpacity
                     style={styles.uploadButton}
                     onPress={takePhoto}
@@ -374,7 +379,7 @@ const styles = StyleSheet.create({
     borderColor: "#3E7BFA",
     borderRadius: 8,
     backgroundColor: "#F0F7FF",
-    padding: 5,
+    padding: 20,
   },
   uploadButtonText: {
     fontSize: 16,
@@ -421,8 +426,8 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   buttonRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+    // flexDirection: "row",
+    // justifyContent: "space-between",
   },
   modalContainer: {
     flex: 1,
