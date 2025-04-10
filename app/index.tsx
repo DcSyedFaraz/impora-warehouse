@@ -94,7 +94,7 @@ export default function ImporaUploadScreen() {
         console.log("formData", formData);
 
         const endpoint =
-          "https://impora-hausnotruf.de/wp-json/app-api/v1/upload-image";
+          "https://impora-hausnotruf.de/wp-json/wc/v3/app-api/upload-image";
         const username = "ck_470e9a3328471b032538dc5a5240d0da9bbf828d";
         const password = "cs_73664c5f2947028e89a3cf7e0e44dc90c981f5b9";
         const auth = "Basic " + btoa(`${username}:${password}`);
@@ -119,23 +119,30 @@ export default function ImporaUploadScreen() {
       // console.log("uploadedImageLink", uploadedImageLink);
       // console.log("imageUri", imageUri);
 
-      const webhookResponse = await fetch(
-        "https://hook.eu1.make.com/iwhcukw7w37ttjaa8c02oikgyo3wsh16",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            number: numberValue,
-            qrCode: qrValue,
-            imageLink: uploadedImageLink,
-          }),
+      if (numberValue && qrValue && uploadedImageLink) {
+        const webhookResponse = await fetch(
+          "https://hook.eu1.make.com/iwhcukw7w37ttjaa8c02oikgyo3wsh16",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              number: numberValue,
+              qrCode: qrValue,
+              imageLink: uploadedImageLink,
+            }),
+          }
+        );
+        // Handle the response, for example checking for success or errors
+        if (!webhookResponse.ok) {
+          throw new Error(`Webhook request failed: ${webhookResponse.status}`);
         }
-      );
-      // console.log("webhookResponse", webhookResponse);
-
-      if (!webhookResponse.ok) {
-        throw new Error(`Webhook request failed: ${webhookResponse.status}`);
+      } else {
+        setModalHeading("Error");
+        setModalMessage("Webhook call aborted: One or more fields are empty.");
+        setModalVisible(true);
       }
+
+      // console.log("webhookResponse", webhookResponse);
 
       setModalHeading("Daten übermittelt");
       setModalMessage("Die Daten wurden erfolgreich übermittelt.");
