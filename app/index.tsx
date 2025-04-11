@@ -161,9 +161,10 @@ export default function ImporaUploadScreen() {
       setImageUri(null);
     } catch (error) {
       setModalHeading("Error");
-      setModalMessage(
-        `An error occurred: ${error instanceof Error ? error.message : String(error)}`
-      );
+      // setModalMessage(
+      //   `An error occurred: ${error instanceof Error ? error.message : String(error)}`
+      // );
+      setModalMessage(`Daten konnten nicht übermittelt werden!`);
       setModalVisible(true);
       // console.error(error);
     } finally {
@@ -299,6 +300,11 @@ export default function ImporaUploadScreen() {
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
+            {modalHeading === "Daten übermittelt" ? (
+              <Ionicons name="checkmark-circle" size={50} color="green" />
+            ) : (
+              <Ionicons name="close-circle" size={50} color="red" />
+            )}
             <Text style={styles.modalTitle}>{modalHeading}</Text>
             <Text style={styles.modalText}>{modalMessage}</Text>
             <TouchableOpacity
