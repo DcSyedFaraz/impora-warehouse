@@ -38,11 +38,11 @@ export default function ImporaUploadScreen() {
       quality: 1,
     });
 
-    console.log("result", result, result.assets);
+    // console.log("result", result, result.assets);
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
       setImageUri(result.assets[0].uri);
-      console.log("imageUri ", result.assets[0].uri, imageUri);
+      // console.log("imageUri ", result.assets[0].uri, imageUri);
     }
   };
 
@@ -64,7 +64,7 @@ export default function ImporaUploadScreen() {
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      console.log("image ", result.assets);
+      // console.log("image ", result.assets);
 
       setImageUri(result.assets[0].uri);
     }
@@ -91,7 +91,7 @@ export default function ImporaUploadScreen() {
           type: "image/jpeg",
         };
         formData.append("image", imageInfo as any);
-        console.log("formData", formData);
+        // console.log("formData", formData);
 
         const endpoint =
           "https://impora-hausnotruf.de/wp-json/wc/v3/app-api/upload-image";
@@ -108,7 +108,7 @@ export default function ImporaUploadScreen() {
           body: formData,
         });
 
-        console.log("response", uploadResponse);
+        // console.log("response", uploadResponse);
         if (!uploadResponse.ok) {
           throw new Error(`Image upload failed: ${uploadResponse.status}`);
         }
@@ -116,8 +116,6 @@ export default function ImporaUploadScreen() {
         const uploadResult = await uploadResponse.json();
         uploadedImageLink = uploadResult.url;
       }
-      // console.log("uploadedImageLink", uploadedImageLink);
-      // console.log("imageUri", imageUri);
 
       if (numberValue && qrValue && uploadedImageLink) {
         const webhookResponse = await fetch(
@@ -136,13 +134,23 @@ export default function ImporaUploadScreen() {
         if (!webhookResponse.ok) {
           throw new Error(`Webhook request failed: ${webhookResponse.status}`);
         }
+
+        const webhookResult = await webhookResponse.json();
+        console.log("webhookResult", webhookResult);
+
+        if (webhookResult != numberValue) {
+          setModalHeading("Error");
+          setModalMessage(
+            `Returned account number (${webhookResult}) does not match the provided account number (${numberValue}).`
+          );
+          setModalVisible(true);
+          return;
+        }
       } else {
         setModalHeading("Error");
         setModalMessage("Webhook call aborted: One or more fields are empty.");
         setModalVisible(true);
       }
-
-      // console.log("webhookResponse", webhookResponse);
 
       setModalHeading("Daten übermittelt");
       setModalMessage("Die Daten wurden erfolgreich übermittelt.");
@@ -157,7 +165,7 @@ export default function ImporaUploadScreen() {
         `An error occurred: ${error instanceof Error ? error.message : String(error)}`
       );
       setModalVisible(true);
-      console.error(error);
+      // console.error(error);
     } finally {
       setIsLoading(false);
     }
@@ -260,10 +268,11 @@ export default function ImporaUploadScreen() {
             <TouchableOpacity
               style={[
                 styles.sendButton,
-                (!numberValue || !qrValue) && styles.sendButtonDisabled,
+                (!numberValue || !qrValue || !imageUri) &&
+                  styles.sendButtonDisabled,
               ]}
               onPress={handleSend}
-              disabled={isLoading || !numberValue || !qrValue}
+              disabled={isLoading || !numberValue || !qrValue || !imageUri}
             >
               {isLoading ? (
                 <ActivityIndicator color="#FFFFFF" />
