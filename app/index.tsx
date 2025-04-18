@@ -14,6 +14,8 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 
+const APP_VERSION = "2.0.0"; // Add version number here
+
 export default function ImporaUploadScreen() {
   const [selectedForm, setSelectedForm] = useState<
     "accountQR" | "verpackung" | null
@@ -207,6 +209,14 @@ export default function ImporaUploadScreen() {
       {!selectedForm ? (
         <SafeAreaView style={styles.safeArea}>
           <View style={styles.selectionContainer}>
+            {/* Add logo to selection screen */}
+            <Image
+              source={{
+                uri: "https://impora-hausnotruf.de/wp-content/uploads/2025/02/impora-hausnotruf-logo.webp",
+              }}
+              style={styles.selectionLogo}
+            />
+
             <TouchableOpacity
               style={styles.selectionButton}
               onPress={() => handleFormChange("accountQR")}
@@ -223,26 +233,34 @@ export default function ImporaUploadScreen() {
                 Verpackungsbild verarbeiten
               </Text>
             </TouchableOpacity>
+
+            {/* Add version number at bottom */}
+            <Text style={styles.versionText}>Version {APP_VERSION}</Text>
           </View>
         </SafeAreaView>
       ) : (
         <SafeAreaView style={styles.safeArea}>
-          <TouchableOpacity
-            style={styles.changeOptionButton}
-            onPress={() => handleFormChange(null)}
-          >
-            <Text style={styles.changeOptionText}>Change Option</Text>
-          </TouchableOpacity>
           <ScrollView contentContainerStyle={styles.scrollContainer}>
             <View style={styles.container}>
               <View style={styles.header}>
+                {/* Always show logo on main screen */}
                 <Image
                   source={{
                     uri: "https://impora-hausnotruf.de/wp-content/uploads/2025/02/impora-hausnotruf-logo.webp",
                   }}
                   style={styles.logo}
                 />
+
+                {/* Repositioned Menu button */}
+                <TouchableOpacity
+                  style={styles.menuButton}
+                  onPress={() => handleFormChange(null)}
+                >
+                  <Ionicons name="menu" size={24} color="#FFFFFF" />
+                  <Text style={styles.menuButtonText}>Menü</Text>
+                </TouchableOpacity>
               </View>
+
               <View style={styles.formContainer}>
                 {selectedForm === "accountQR" && (
                   <>
@@ -289,7 +307,8 @@ export default function ImporaUploadScreen() {
 
                 {selectedForm === "verpackung" && (
                   <View style={styles.imageSection}>
-                    <Text style={styles.inputLabel}>Image Upload</Text>
+                    {/* Changed to "Bild hochladen" */}
+                    <Text style={styles.inputLabel}>Bild hochladen</Text>
                     {imageUri ? (
                       <View style={styles.imageContainer}>
                         <Image
@@ -353,7 +372,8 @@ export default function ImporaUploadScreen() {
                         color="#FFFFFF"
                         style={styles.sendIcon}
                       />
-                      <Text style={styles.sendButtonText}>Send Data</Text>
+                      {/* Changed to "Daten senden" */}
+                      <Text style={styles.sendButtonText}>Daten senden</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -402,6 +422,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    padding: 20,
+  },
+  selectionLogo: {
+    width: 200,
+    height: 70,
+    resizeMode: "contain",
+    marginBottom: 40,
   },
   selectionButton: {
     width: "80%",
@@ -416,16 +443,24 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
   },
-  changeOptionButton: {
-    alignSelf: "flex-end",
-    marginHorizontal: 20,
-    marginTop: 40,
+  versionText: {
+    position: "absolute",
+    bottom: 20,
+    color: "#666",
+    fontSize: 14,
+  },
+  // Replaced changeOptionButton with menuButton
+  menuButton: {
+    position: "absolute",
+    top: 10,
+    right: 10,
     paddingVertical: 8,
     paddingHorizontal: 12,
     backgroundColor: "#3E7BFA",
     borderRadius: 6,
+    zIndex: 10,
   },
-  changeOptionText: {
+  menuButtonText: {
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "600",
@@ -439,13 +474,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 30,
     paddingVertical: 10,
+    position: "relative",
   },
   logo: {
-    width: 150,
-    height: 50,
+    width: 180,
+    height: 60,
     resizeMode: "contain",
     alignSelf: "center",
     marginBottom: 20,
+    marginTop: 20,
   },
   formContainer: {
     backgroundColor: "#FFFFFF",
@@ -505,7 +542,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   buttonRow: {
-    alignItems: "center",
+    // alignItems: "center",
   },
   imageContainer: {
     position: "relative",
