@@ -14,7 +14,7 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 
-const APP_VERSION = "2.0.0"; // Add version number here
+const APP_VERSION = "2.0.1"; // Add version number here
 
 export default function ImporaUploadScreen() {
   const [selectedForm, setSelectedForm] = useState<
@@ -174,7 +174,9 @@ export default function ImporaUploadScreen() {
 
         if (webhookResult != "done") {
           setModalHeading("Error");
-          setModalMessage(`Daten konnten nicht übermittelt werden!`);
+          setModalMessage(
+            `Daten konnten nicht übermittelt werden! Server response: ${webhookResult}`
+          );
           setModalVisible(true);
           return;
         }
