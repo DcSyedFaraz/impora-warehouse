@@ -25,7 +25,7 @@ interface ModalState {
 }
 
 // Constants
-const APP_VERSION = "2.1.0";
+const APP_VERSION = "2.0.1";
 const LOGO_URL =
   "https://impora-hausnotruf.de/wp-content/uploads/2025/02/impora-hausnotruf-logo.webp";
 
@@ -125,11 +125,8 @@ export default function ImporaUploadScreen() {
 
   // Validation
   const validateForm = (): { isValid: boolean; message?: string } => {
-    if (
-      selectedForm === "imeiQR" &&
-      (!formData.imeiValue || !formData.qrValue)
-    ) {
-      return { isValid: false, message: "Please enter IMEI & QR value." };
+    if (selectedForm === "imeiQR" && !formData.imeiValue) {
+      return { isValid: false, message: "Please enter IMEI." };
     }
 
     if (
@@ -155,17 +152,31 @@ export default function ImporaUploadScreen() {
   };
 
   // API functions
-  const uploadImage = async (
-    imageUri: string,
-    imageName: string
-  ): Promise<string> => {
+  const uploadImages = async (): Promise<string[]> => {
+    if (!images.imageUri1 && !images.imageUri2) {
+      return [];
+    }
+
     const formData = new FormData();
-    const imageInfo = {
-      uri: imageUri,
-      name: imageName,
-      type: "image/jpeg",
-    };
-    formData.append("image", imageInfo as any);
+
+    if (images.imageUri1) {
+      const imageInfo1 = {
+        uri: images.imageUri1,
+        name: "image1.jpg",
+        type: "image/jpeg",
+      };
+      formData.append("image[]", imageInfo1 as any);
+    }
+
+    if (images.imageUri2) {
+      const imageInfo2 = {
+        uri: images.imageUri2,
+        name: "image2.jpg",
+        type: "image/jpeg",
+      };
+      formData.append("image[]", imageInfo2 as any);
+    }
+    console.log("Uploading images:", formData);
 
     const auth =
       "Basic " +
@@ -187,23 +198,16 @@ export default function ImporaUploadScreen() {
     }
 
     const result = await response.json();
-    return result.url;
-  };
+    console.log("Image upload response:", result);
 
-  const uploadImages = async (): Promise<string[]> => {
-    const uploadPromises: Promise<string>[] = [];
-
-    if (images.imageUri1) {
-      uploadPromises.push(uploadImage(images.imageUri1, "image1.jpg"));
-    }
-    if (images.imageUri2) {
-      uploadPromises.push(uploadImage(images.imageUri2, "image2.jpg"));
+    if (!result.success || !result.urls) {
+      throw new Error("Image upload failed - invalid response format");
     }
 
-    return Promise.all(uploadPromises);
+    return result.urls;
   };
 
-  const buildPayload = (uploadedImageLinks: string[]) => {
+  const buildPayload = (uploadedImageUrls: string[]) => {
     const basePayload = {
       product_way: selectedProduct,
     };
@@ -228,14 +232,14 @@ export default function ImporaUploadScreen() {
       case "verpackung":
         if (selectedProduct === "basisstation") {
           return {
-            imageLink: uploadedImageLinks[0],
+            imageLink: uploadedImageUrls[0],
             way: "picutre-box",
           };
         } else {
           return {
             ...basePayload,
-            imeiImage: uploadedImageLinks[0],
-            qrCodeImage: uploadedImageLinks[1],
+            imeiImage: uploadedImageUrls[0],
+            qrCodeImage: uploadedImageUrls[1],
             way: "picutre-box",
           };
         }
@@ -273,8 +277,8 @@ export default function ImporaUploadScreen() {
     setIsLoading(true);
 
     try {
-      const uploadedImageLinks = await uploadImages();
-      const payload = buildPayload(uploadedImageLinks);
+      const uploadedImageUrls = await uploadImages();
+      const payload = buildPayload(uploadedImageUrls);
 
       console.log("Payload to send:", payload);
 
@@ -286,8 +290,12 @@ export default function ImporaUploadScreen() {
       );
       resetForm();
     } catch (error) {
-      console.error("Error during data submission:", error);
-      showModal("Error", "Daten konnten nicht übermittelt werden!");
+      const errorStr = error instanceof Error ? error.message : String(error);
+      console.error("Error during data submission:", errorStr);
+      const errorMessage = errorStr.toLowerCase().includes("server")
+        ? `Daten konnten nicht übermittelt werden! Server response: ${errorStr}`
+        : "Daten konnten nicht übermittelt werden!";
+      showModal("Error", errorMessage);
     } finally {
       setIsLoading(false);
     }
