@@ -2,7 +2,7 @@
   "expo": {
     "name": "IMPORA Warehouse",
     "slug": "impora",
-    "version": "1.0.0",
+    "version": "2.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/adaptive-icon.png",
     "scheme": "myapp",

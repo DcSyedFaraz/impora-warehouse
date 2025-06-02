@@ -14,49 +14,99 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 
-const APP_VERSION = "2.0.1"; // Add version number here
+// Types
+type ProductType = "basisstation" | "james_uhr";
+type FormType = "accountQR" | "verpackung" | "imeiQR";
+
+interface ModalState {
+  visible: boolean;
+  heading: string;
+  message: string;
+}
+
+// Constants
+const APP_VERSION = "2.1.0";
+const LOGO_URL =
+  "https://impora-hausnotruf.de/wp-content/uploads/2025/02/impora-hausnotruf-logo.webp";
+
+const API_CONFIG = {
+  imageUploadEndpoint:
+    "https://impora-hausnotruf.de/wp-json/wc/v3/app-api/upload-image",
+  webhookEndpoint: "https://hook.eu1.make.com/iwhcukw7w37ttjaa8c02oikgyo3wsh16",
+  credentials: {
+    username: "ck_470e9a3328471b032538dc5a5240d0da9bbf828d",
+    password: "cs_73664c5f2947028e89a3cf7e0e44dc90c981f5b9",
+  },
+};
 
 export default function ImporaUploadScreen() {
-  const [selectedForm, setSelectedForm] = useState<
-    "accountQR" | "verpackung" | null
-  >(null);
-  const [numberValue, setNumberValue] = useState("");
-  const [qrValue, setQrValue] = useState("");
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  // State management
+  const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(
+    null
+  );
+  const [selectedForm, setSelectedForm] = useState<FormType | null>(null);
+  const [formData, setFormData] = useState({
+    numberValue: "",
+    qrValue: "",
+    imeiValue: "",
+  });
+  const [images, setImages] = useState({
+    imageUri1: null as string | null,
+    imageUri2: null as string | null,
+  });
   const [isLoading, setIsLoading] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [modalMessage, setModalMessage] = useState("");
-  const [modalHeading, setModalHeading] = useState("");
+  const [modal, setModal] = useState<ModalState>({
+    visible: false,
+    heading: "",
+    message: "",
+  });
 
-  // Function to take a photo using the device camera
-  const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== "granted") {
-      setModalHeading("Permission Error");
-      setModalMessage("Permission to access gallery was denied.");
-      setModalVisible(true);
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: false,
-      quality: 1,
-    });
-
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      setImageUri(result.assets[0].uri);
-    }
+  // Utility functions
+  const showModal = (heading: string, message: string) => {
+    setModal({ visible: true, heading, message });
   };
 
-  // This function handles picking an image from the gallery
-  const pickImage = async () => {
+  const hideModal = () => {
+    setModal({ ...modal, visible: false });
+  };
+
+  const resetForm = () => {
+    setFormData({ numberValue: "", qrValue: "", imeiValue: "" });
+    setImages({ imageUri1: null, imageUri2: null });
+  };
+
+  const resetAll = () => {
+    setSelectedForm(null);
+    resetForm();
+  };
+
+  // Product and form handlers
+  const handleProductChange = (product: ProductType) => {
+    setSelectedProduct(product);
+    resetAll();
+  };
+
+  const handleFormChange = (newForm: FormType) => {
+    setSelectedForm(newForm);
+    resetForm();
+  };
+
+  const updateFormData = (field: keyof typeof formData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // Image handling
+  const requestImagePermission = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      setModalHeading("Permission Error");
-      setModalMessage("Permission to access camera was denied.");
-      setModalVisible(true);
-      return;
+      showModal("Permission Error", "Permission to access camera was denied.");
+      return false;
     }
+    return true;
+  };
+
+  const pickImage = async (imageKey: "imageUri1" | "imageUri2") => {
+    if (!(await requestImagePermission())) return;
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
@@ -64,352 +114,457 @@ export default function ImporaUploadScreen() {
       quality: 1,
     });
 
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      setImageUri(result.assets[0].uri);
+    if (!result.canceled && result.assets?.[0]) {
+      setImages((prev) => ({ ...prev, [imageKey]: result.assets[0].uri }));
     }
   };
 
-  const handleFormChange = (newForm: "accountQR" | "verpackung" | null) => {
-    // Clear all input values when changing forms
-    setNumberValue("");
-    setQrValue("");
-    setImageUri(null);
-    setSelectedForm(newForm);
+  const removeImage = (imageKey: "imageUri1" | "imageUri2") => {
+    setImages((prev) => ({ ...prev, [imageKey]: null }));
   };
 
+  // Validation
+  const validateForm = (): { isValid: boolean; message?: string } => {
+    if (
+      selectedForm === "imeiQR" &&
+      (!formData.imeiValue || !formData.qrValue)
+    ) {
+      return { isValid: false, message: "Please enter IMEI & QR value." };
+    }
+
+    if (
+      selectedForm === "accountQR" &&
+      (!formData.numberValue || !formData.qrValue)
+    ) {
+      return { isValid: false, message: "Please fill in all required fields." };
+    }
+
+    if (selectedForm === "verpackung") {
+      if (selectedProduct === "basisstation" && !images.imageUri1) {
+        return { isValid: false, message: "Please upload an image." };
+      }
+      if (
+        selectedProduct === "james_uhr" &&
+        (!images.imageUri1 || !images.imageUri2)
+      ) {
+        return { isValid: false, message: "Please upload both images." };
+      }
+    }
+
+    return { isValid: true };
+  };
+
+  // API functions
+  const uploadImage = async (
+    imageUri: string,
+    imageName: string
+  ): Promise<string> => {
+    const formData = new FormData();
+    const imageInfo = {
+      uri: imageUri,
+      name: imageName,
+      type: "image/jpeg",
+    };
+    formData.append("image", imageInfo as any);
+
+    const auth =
+      "Basic " +
+      btoa(
+        `${API_CONFIG.credentials.username}:${API_CONFIG.credentials.password}`
+      );
+
+    const response = await fetch(API_CONFIG.imageUploadEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "multipart/form-data",
+        Authorization: auth,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Image upload failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+    return result.url;
+  };
+
+  const uploadImages = async (): Promise<string[]> => {
+    const uploadPromises: Promise<string>[] = [];
+
+    if (images.imageUri1) {
+      uploadPromises.push(uploadImage(images.imageUri1, "image1.jpg"));
+    }
+    if (images.imageUri2) {
+      uploadPromises.push(uploadImage(images.imageUri2, "image2.jpg"));
+    }
+
+    return Promise.all(uploadPromises);
+  };
+
+  const buildPayload = (uploadedImageLinks: string[]) => {
+    const basePayload = {
+      product_way: selectedProduct,
+    };
+
+    switch (selectedForm) {
+      case "imeiQR":
+        return {
+          ...basePayload,
+          imei: formData.imeiValue,
+          qrCode: formData.qrValue,
+          way: "imei-qr-code",
+        };
+
+      case "accountQR":
+        return {
+          ...basePayload,
+          number: formData.numberValue,
+          qrCode: formData.qrValue,
+          way: "account-id-with-qr-code",
+        };
+
+      case "verpackung":
+        if (selectedProduct === "basisstation") {
+          return {
+            imageLink: uploadedImageLinks[0],
+            way: "picutre-box",
+          };
+        } else {
+          return {
+            ...basePayload,
+            imeiImage: uploadedImageLinks[0],
+            qrCodeImage: uploadedImageLinks[1],
+            way: "picutre-box",
+          };
+        }
+
+      default:
+        throw new Error("Invalid form type");
+    }
+  };
+
+  const sendToWebhook = async (payload: any) => {
+    const response = await fetch(API_CONFIG.webhookEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Webhook request failed: ${response.status}`);
+    }
+
+    const result = await response.text();
+    if (result !== "done") {
+      throw new Error(`Server response: ${result}`);
+    }
+  };
+
+  // Main submit handler
   const handleSend = async () => {
-    if (selectedForm === "accountQR") {
-      if (!numberValue || !qrValue) {
-        setModalHeading("Missing Information");
-        setModalMessage("Please fill in all required fields.");
-        setModalVisible(true);
-        return;
-      }
-    } else if (selectedForm === "verpackung") {
-      if (!imageUri) {
-        setModalHeading("Missing Information");
-        setModalMessage("Please upload an image.");
-        setModalVisible(true);
-        return;
-      }
+    const validation = validateForm();
+    if (!validation.isValid) {
+      showModal("Missing Information", validation.message!);
+      return;
     }
 
     setIsLoading(true);
 
     try {
-      let uploadedImageLink = null;
+      const uploadedImageLinks = await uploadImages();
+      const payload = buildPayload(uploadedImageLinks);
 
-      if (imageUri) {
-        const formData = new FormData();
-        const imageInfo = {
-          uri: imageUri,
-          name: "photo.jpg",
-          type: "image/jpeg",
-        };
-        formData.append("image", imageInfo as any);
+      console.log("Payload to send:", payload);
 
-        console.log("FormData:", formData);
+      await sendToWebhook(payload);
 
-        const endpoint =
-          "https://impora-hausnotruf.de/wp-json/wc/v3/app-api/upload-image";
-        const username = "ck_470e9a3328471b032538dc5a5240d0da9bbf828d";
-        const password = "cs_73664c5f2947028e89a3cf7e0e44dc90c981f5b9";
-        const auth = "Basic " + btoa(`${username}:${password}`);
-
-        const uploadResponse = await fetch(endpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "multipart/form-data",
-            Authorization: auth,
-          },
-          body: formData,
-        });
-
-        if (!uploadResponse.ok) {
-          throw new Error(`Image upload failed: ${uploadResponse.status}`);
-        }
-
-        const uploadResult = await uploadResponse.json();
-        uploadedImageLink = uploadResult.url;
-      }
-
-      const payload =
-        selectedForm === "accountQR"
-          ? {
-              number: numberValue,
-              qrCode: qrValue,
-              way: "account-id-with-qr-code",
-            }
-          : {
-              imageLink: uploadedImageLink,
-              way: "picutre-box",
-            };
-      if (
-        selectedForm === "accountQR" ||
-        (selectedForm === "verpackung" && uploadedImageLink)
-      ) {
-        const webhookResponse = await fetch(
-          "https://hook.eu1.make.com/iwhcukw7w37ttjaa8c02oikgyo3wsh16",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          }
-        );
-
-        if (!webhookResponse.ok) {
-          throw new Error(`Webhook request failed: ${webhookResponse.status}`);
-        }
-
-        // let webhookResult;
-        const webhookResult = await webhookResponse.text();
-        // try {
-        //   webhookResult = JSON.parse(responseText);
-        // } catch (error) {
-        //   console.log("Response text:", responseText);
-        //   throw new Error("Invalid JSON response from webhook");
-        // }
-
-        console.log("webhookResult", webhookResult);
-
-        if (webhookResult != "done") {
-          setModalHeading("Error");
-          setModalMessage(
-            `Daten konnten nicht übermittelt werden! Server response: ${webhookResult}`
-          );
-          setModalVisible(true);
-          return;
-        }
-      } else {
-        setModalHeading("Error");
-        setModalMessage("Webhook call aborted: One or more fields are empty.");
-        setModalVisible(true);
-        return;
-      }
-
-      setModalHeading("Daten übermittelt");
-      setModalMessage("Die Daten wurden erfolgreich übermittelt.");
-      setModalVisible(true);
-
-      setNumberValue("");
-      setQrValue("");
-      setImageUri(null);
+      showModal(
+        "Daten übermittelt",
+        "Die Daten wurden erfolgreich übermittelt."
+      );
+      resetForm();
     } catch (error) {
-      console.log("Error:", error);
-
-      setModalHeading("Error");
-      setModalMessage(`Daten konnten nicht übermittelt werden!`);
-      setModalVisible(true);
+      console.error("Error during data submission:", error);
+      showModal("Error", "Daten konnten nicht übermittelt werden!");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Render either selection screen or main form based on selectedForm state
-  return (
-    <>
-      {!selectedForm ? (
-        <SafeAreaView style={styles.safeArea}>
-          <View style={styles.selectionContainer}>
-            {/* Add logo to selection screen */}
-            <Image
-              source={{
-                uri: "https://impora-hausnotruf.de/wp-content/uploads/2025/02/impora-hausnotruf-logo.webp",
-              }}
-              style={styles.selectionLogo}
-            />
+  // Render functions
+  const renderProductSelection = () => (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.selectionContainer}>
+        <Image source={{ uri: LOGO_URL }} style={styles.selectionLogo} />
+        <TouchableOpacity
+          style={styles.selectionButton}
+          onPress={() => handleProductChange("basisstation")}
+        >
+          <Text style={styles.selectionButtonText}>Basisstation</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.selectionButton}
+          onPress={() => handleProductChange("james_uhr")}
+        >
+          <Text style={styles.selectionButtonText}>JAMES Uhr</Text>
+        </TouchableOpacity>
+        <Text style={styles.versionText}>Version {APP_VERSION}</Text>
+      </View>
+    </SafeAreaView>
+  );
 
-            <TouchableOpacity
-              style={styles.selectionButton}
-              onPress={() => handleFormChange("accountQR")}
-            >
-              <Text style={styles.selectionButtonText}>
-                Account ID &amp; QR Code
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.selectionButton}
-              onPress={() => handleFormChange("verpackung")}
-            >
-              <Text style={styles.selectionButtonText}>
-                Verpackungsbild verarbeiten
-              </Text>
-            </TouchableOpacity>
+  const renderFormOptions = () => {
+    const options =
+      selectedProduct === "basisstation"
+        ? [
+            { key: "accountQR" as FormType, label: "Account ID & QR Code" },
+            {
+              key: "verpackung" as FormType,
+              label: "Verpackungsbild verarbeiten",
+            },
+          ]
+        : [
+            { key: "imeiQR" as FormType, label: "IMEI & QR Code" },
+            {
+              key: "verpackung" as FormType,
+              label: "Verpackungsbild verarbeiten",
+            },
+          ];
 
-            {/* Add version number at bottom */}
-            <Text style={styles.versionText}>Version {APP_VERSION}</Text>
-          </View>
-        </SafeAreaView>
+    return (
+      <View style={styles.selectionOptions}>
+        {options.map((option) => (
+          <TouchableOpacity
+            key={option.key}
+            style={styles.selectionButton}
+            onPress={() => handleFormChange(option.key)}
+          >
+            <Text style={styles.selectionButtonText}>{option.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  };
+
+  const renderTextInput = (
+    label: string,
+    value: string,
+    onChangeText: (text: string) => void,
+    placeholder: string,
+    iconName: any,
+    keyboardType: any = "default",
+    maxLength?: number
+  ) => (
+    <View style={styles.inputContainer}>
+      <Text style={styles.inputLabel}>{label}</Text>
+      <View style={styles.inputWrapper}>
+        <Ionicons
+          name={iconName}
+          size={20}
+          color="#3E7BFA"
+          style={styles.inputIcon}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder={placeholder}
+          value={value}
+          onChangeText={onChangeText}
+          placeholderTextColor="#A0A0A0"
+          keyboardType={keyboardType}
+          maxLength={maxLength}
+        />
+      </View>
+    </View>
+  );
+
+  const renderImageUpload = (
+    label: string,
+    imageUri: string | null,
+    onPress: () => void,
+    onRemove: () => void,
+    buttonText: string
+  ) => (
+    <View style={styles.imageSection}>
+      <Text style={styles.inputLabel}>{label}</Text>
+      {imageUri ? (
+        <View style={styles.imageContainer}>
+          <Image source={{ uri: imageUri }} style={styles.previewImage} />
+          <TouchableOpacity style={styles.removeImageButton} onPress={onRemove}>
+            <Ionicons name="close-circle" size={24} color="#FF3B30" />
+          </TouchableOpacity>
+        </View>
       ) : (
-        <SafeAreaView style={styles.safeArea}>
-          <ScrollView contentContainerStyle={styles.scrollContainer}>
-            <View style={styles.container}>
-              <View style={styles.header}>
-                {/* Always show logo on main screen */}
-                <Image
-                  source={{
-                    uri: "https://impora-hausnotruf.de/wp-content/uploads/2025/02/impora-hausnotruf-logo.webp",
-                  }}
-                  style={styles.logo}
-                />
+        <TouchableOpacity style={styles.uploadButton} onPress={onPress}>
+          <Ionicons name="camera-outline" size={28} color="#3E7BFA" />
+          <Text style={styles.uploadButtonText}>{buttonText}</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
 
-                {/* Repositioned Menu button */}
-                <TouchableOpacity
-                  style={styles.menuButton}
-                  onPress={() => handleFormChange(null)}
-                >
-                  <Ionicons name="menu" size={24} color="#FFFFFF" />
-                  <Text style={styles.menuButtonText}>Menü</Text>
-                </TouchableOpacity>
-              </View>
+  const renderFormInputs = () => {
+    if (selectedForm === "imeiQR" && selectedProduct === "james_uhr") {
+      return (
+        <>
+          {renderTextInput(
+            "IMEI",
+            formData.imeiValue,
+            (text) => updateFormData("imeiValue", text),
+            "Enter IMEI",
+            "keypad-outline",
+            "number-pad",
+            15
+          )}
+          {renderTextInput(
+            "QR Code",
+            formData.qrValue,
+            (text) => updateFormData("qrValue", text),
+            "Enter QR Code",
+            "qr-code-outline"
+          )}
+        </>
+      );
+    }
 
-              <View style={styles.formContainer}>
-                {selectedForm === "accountQR" && (
+    if (selectedForm === "accountQR" && selectedProduct === "basisstation") {
+      return (
+        <>
+          {renderTextInput(
+            "Account ID",
+            formData.numberValue,
+            (text) => updateFormData("numberValue", text),
+            "Enter Account ID",
+            "keypad-outline",
+            "number-pad",
+            15
+          )}
+          {renderTextInput(
+            "QR Code",
+            formData.qrValue,
+            (text) => updateFormData("qrValue", text),
+            "Enter QR Code",
+            "qr-code-outline"
+          )}
+        </>
+      );
+    }
+
+    if (selectedForm === "verpackung") {
+      if (selectedProduct === "basisstation") {
+        return renderImageUpload(
+          "Bild hochladen",
+          images.imageUri1,
+          () => pickImage("imageUri1"),
+          () => removeImage("imageUri1"),
+          "Upload Photo"
+        );
+      } else {
+        return (
+          <>
+            {renderImageUpload(
+              "IMEI Bild",
+              images.imageUri1,
+              () => pickImage("imageUri1"),
+              () => removeImage("imageUri1"),
+              "Upload IMEI Bild"
+            )}
+            {renderImageUpload(
+              "QR Code Bild",
+              images.imageUri2,
+              () => pickImage("imageUri2"),
+              () => removeImage("imageUri2"),
+              "Upload QR Code Bild"
+            )}
+          </>
+        );
+      }
+    }
+
+    return null;
+  };
+
+  const renderModal = () => (
+    <Modal
+      animationType="fade"
+      transparent={true}
+      visible={modal.visible}
+      onRequestClose={hideModal}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <Ionicons
+            name={
+              modal.heading === "Daten übermittelt"
+                ? "checkmark-circle"
+                : "close-circle"
+            }
+            size={50}
+            color={modal.heading === "Daten übermittelt" ? "green" : "red"}
+          />
+          <Text style={styles.modalTitle}>{modal.heading}</Text>
+          <Text style={styles.modalText}>{modal.message}</Text>
+          <TouchableOpacity style={styles.modalButton} onPress={hideModal}>
+            <Text style={styles.modalButtonText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderMainContent = () => (
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <Image source={{ uri: LOGO_URL }} style={styles.logo} />
+            <TouchableOpacity
+              style={styles.menuButton}
+              onPress={() => setSelectedProduct(null)}
+            >
+              <Ionicons name="menu" size={24} color="#FFFFFF" />
+              <Text style={styles.menuButtonText}>Menü</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.formContainer}>
+            {!selectedForm && renderFormOptions()}
+            {renderFormInputs()}
+
+            {selectedForm && (
+              <TouchableOpacity
+                style={[
+                  styles.sendButton,
+                  isLoading && styles.sendButtonDisabled,
+                ]}
+                onPress={handleSend}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
                   <>
-                    <View style={styles.inputContainer}>
-                      <Text style={styles.inputLabel}>Account ID</Text>
-                      <View style={styles.inputWrapper}>
-                        <Ionicons
-                          name="keypad-outline"
-                          size={20}
-                          color="#3E7BFA"
-                          style={styles.inputIcon}
-                        />
-                        <TextInput
-                          style={styles.input}
-                          placeholder="Scan or enter a number"
-                          value={numberValue}
-                          onChangeText={setNumberValue}
-                          placeholderTextColor="#A0A0A0"
-                          keyboardType="number-pad"
-                          maxLength={8}
-                        />
-                      </View>
-                    </View>
-                    <View style={styles.inputContainer}>
-                      <Text style={styles.inputLabel}>QR Code</Text>
-                      <View style={styles.inputWrapper}>
-                        <Ionicons
-                          name="qr-code-outline"
-                          size={20}
-                          color="#3E7BFA"
-                          style={styles.inputIcon}
-                        />
-                        <TextInput
-                          style={styles.input}
-                          placeholder="Scan or enter a QR Code"
-                          value={qrValue}
-                          onChangeText={setQrValue}
-                          placeholderTextColor="#A0A0A0"
-                        />
-                      </View>
-                    </View>
+                    <Ionicons
+                      name="send"
+                      size={20}
+                      color="#FFFFFF"
+                      style={styles.sendIcon}
+                    />
+                    <Text style={styles.sendButtonText}>Daten senden</Text>
                   </>
                 )}
-
-                {selectedForm === "verpackung" && (
-                  <View style={styles.imageSection}>
-                    {/* Changed to "Bild hochladen" */}
-                    <Text style={styles.inputLabel}>Bild hochladen</Text>
-                    {imageUri ? (
-                      <View style={styles.imageContainer}>
-                        <Image
-                          source={{ uri: imageUri }}
-                          style={styles.previewImage}
-                        />
-                        <TouchableOpacity
-                          style={styles.removeImageButton}
-                          onPress={() => setImageUri(null)}
-                        >
-                          <Ionicons
-                            name="close-circle"
-                            size={24}
-                            color="#FF3B30"
-                          />
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <View style={styles.buttonRow}>
-                        <TouchableOpacity
-                          style={styles.uploadButton}
-                          onPress={takePhoto}
-                        >
-                          <Ionicons
-                            name="camera-outline"
-                            size={28}
-                            color="#3E7BFA"
-                          />
-                          <Text style={styles.uploadButtonText}>
-                            Take Photo
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </View>
-                )}
-
-                <TouchableOpacity
-                  style={[
-                    styles.sendButton,
-                    ((selectedForm === "accountQR" &&
-                      (!numberValue || !qrValue)) ||
-                      (selectedForm === "verpackung" && !imageUri)) &&
-                      styles.sendButtonDisabled,
-                  ]}
-                  onPress={handleSend}
-                  disabled={
-                    isLoading ||
-                    (selectedForm === "accountQR"
-                      ? !numberValue || !qrValue
-                      : !imageUri)
-                  }
-                >
-                  {isLoading ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <>
-                      <Ionicons
-                        name="send"
-                        size={20}
-                        color="#FFFFFF"
-                        style={styles.sendIcon}
-                      />
-                      {/* Changed to "Daten senden" */}
-                      <Text style={styles.sendButtonText}>Daten senden</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </ScrollView>
-          <Modal
-            animationType="fade"
-            transparent={true}
-            visible={modalVisible}
-            onRequestClose={() => setModalVisible(false)}
-          >
-            <View style={styles.modalContainer}>
-              <View style={styles.modalContent}>
-                {modalHeading === "Daten übermittelt" ? (
-                  <Ionicons name="checkmark-circle" size={50} color="green" />
-                ) : (
-                  <Ionicons name="close-circle" size={50} color="red" />
-                )}
-                <Text style={styles.modalTitle}>{modalHeading}</Text>
-                <Text style={styles.modalText}>{modalMessage}</Text>
-                <TouchableOpacity
-                  style={styles.modalButton}
-                  onPress={() => setModalVisible(false)}
-                >
-                  <Text style={styles.modalButtonText}>Close</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </Modal>
-        </SafeAreaView>
-      )}
-    </>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </ScrollView>
+      {renderModal()}
+    </SafeAreaView>
   );
+
+  // Main render
+  return selectedProduct ? renderMainContent() : renderProductSelection();
 }
 
 const styles = StyleSheet.create({
@@ -451,7 +606,11 @@ const styles = StyleSheet.create({
     color: "#666",
     fontSize: 14,
   },
-  // Replaced changeOptionButton with menuButton
+  selectionOptions: {
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   menuButton: {
     position: "absolute",
     top: 10,
@@ -542,9 +701,6 @@ const styles = StyleSheet.create({
     color: "#3E7BFA",
     fontWeight: "600",
     marginLeft: 8,
-  },
-  buttonRow: {
-    // alignItems: "center",
   },
   imageContainer: {
     position: "relative",
