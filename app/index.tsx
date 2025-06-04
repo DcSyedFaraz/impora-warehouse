@@ -25,7 +25,7 @@ interface ModalState {
 }
 
 // Constants
-const APP_VERSION = "2.0.1";
+const APP_VERSION = "2.1.0";
 const LOGO_URL =
   "https://impora-hausnotruf.de/wp-content/uploads/2025/02/impora-hausnotruf-logo.webp";
 
