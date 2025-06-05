@@ -1,4 +1,5 @@
 {
+  "$schema": "https://json.schemastore.org/package",
   "name": "impora",
   "main": "expo-router/entry",
   "version": "1.0.0",

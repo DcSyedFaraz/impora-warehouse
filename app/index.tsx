@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { memo, useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -25,7 +25,7 @@ interface ModalState {
 }
 
 // Constants
-const APP_VERSION = "2.1.0";
+const APP_VERSION = "2.1.1";
 const LOGO_URL =
   "https://impora-hausnotruf.de/wp-content/uploads/2025/02/impora-hausnotruf-logo.webp";
 
@@ -38,6 +38,54 @@ const API_CONFIG = {
     password: "cs_73664c5f2947028e89a3cf7e0e44dc90c981f5b9",
   },
 };
+// ────────────────────────────────────────────────────────────
+// Optimised text input: local state ➜ commit on blur only
+// ────────────────────────────────────────────────────────────
+const InputField = memo(
+  ({
+    label,
+    value,
+    onChangeValue,
+    placeholder,
+    iconName,
+    keyboardType = "default",
+    maxLength,
+  }: {
+    label: string;
+    value: string;
+    onChangeValue: (t: string) => void;
+    placeholder: string;
+    iconName: any;
+    keyboardType?: any;
+    maxLength?: number;
+  }) => {
+    const [local, setLocal] = useState(value);
+    useEffect(() => setLocal(value), [value]);
+    return (
+      <View style={styles.inputContainer}>
+        <Text style={styles.inputLabel}>{label}</Text>
+        <View style={styles.inputWrapper}>
+          <Ionicons
+            name={iconName}
+            size={20}
+            color="#3E7BFA"
+            style={styles.inputIcon}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder={placeholder}
+            value={local}
+            onChangeText={setLocal} /* local typing only */
+            onEndEditing={() => onChangeValue(local)} /* commit */
+            placeholderTextColor="#A0A0A0"
+            keyboardType={keyboardType}
+            maxLength={maxLength}
+          />
+        </View>
+      </View>
+    );
+  }
+);
 
 export default function ImporaUploadScreen() {
   // State management
@@ -91,13 +139,19 @@ export default function ImporaUploadScreen() {
     resetForm();
   };
 
-  const updateFormData = (field: keyof typeof formData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  };
+  // const updateFormData = (field: keyof typeof formData, value: string) => {
+  //   setFormData((prev) => ({ ...prev, [field]: value }));
+  // };
+  const updateFormData = useCallback(
+    (field: keyof typeof formData, value: string) =>
+      setFormData((prev) => ({ ...prev, [field]: value })),
+    []
+  );
 
   // Image handling
   const requestImagePermission = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    // const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
       showModal("Permission Error", "Permission to access camera was denied.");
       return false;
@@ -108,11 +162,15 @@ export default function ImporaUploadScreen() {
   const pickImage = async (imageKey: "imageUri1" | "imageUri2") => {
     if (!(await requestImagePermission())) return;
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
+    const result = await ImagePicker.launchCameraAsync({
       allowsEditing: false,
       quality: 1,
     });
+    // const result = await ImagePicker.launchImageLibraryAsync({
+    //   mediaTypes: ["images"],
+    //   allowsEditing: false,
+    //   quality: 1,
+    // });
 
     if (!result.canceled && result.assets?.[0]) {
       setImages((prev) => ({ ...prev, [imageKey]: result.assets[0].uri }));
@@ -224,7 +282,7 @@ export default function ImporaUploadScreen() {
       case "accountQR":
         return {
           ...basePayload,
-          number: formData.numberValue,
+          account_id: formData.numberValue,
           qrCode: formData.qrValue,
           way: "account-id-with-qr-code",
         };
@@ -232,6 +290,7 @@ export default function ImporaUploadScreen() {
       case "verpackung":
         if (selectedProduct === "basisstation") {
           return {
+            ...basePayload,
             imageLink: uploadedImageUrls[0],
             way: "picutre-box",
           };
@@ -416,7 +475,7 @@ export default function ImporaUploadScreen() {
     if (selectedForm === "imeiQR" && selectedProduct === "james_uhr") {
       return (
         <>
-          {renderTextInput(
+          {/* {renderTextInput(
             "IMEI",
             formData.imeiValue,
             (text) => updateFormData("imeiValue", text),
@@ -431,7 +490,23 @@ export default function ImporaUploadScreen() {
             (text) => updateFormData("qrValue", text),
             "Enter QR Code",
             "qr-code-outline"
-          )}
+          )} */}
+          <InputField
+            label="IMEI"
+            value={formData.imeiValue}
+            onChangeValue={(t) => updateFormData("imeiValue", t)}
+            placeholder="Enter IMEI"
+            iconName="keypad-outline"
+            keyboardType="number-pad"
+            maxLength={15}
+          />
+          <InputField
+            label="QR Code"
+            value={formData.qrValue}
+            onChangeValue={(t) => updateFormData("qrValue", t)}
+            placeholder="Enter QR Code"
+            iconName="qr-code-outline"
+          />
         </>
       );
     }
@@ -439,7 +514,7 @@ export default function ImporaUploadScreen() {
     if (selectedForm === "accountQR" && selectedProduct === "basisstation") {
       return (
         <>
-          {renderTextInput(
+          {/* {renderTextInput(
             "Account ID",
             formData.numberValue,
             (text) => updateFormData("numberValue", text),
@@ -454,7 +529,23 @@ export default function ImporaUploadScreen() {
             (text) => updateFormData("qrValue", text),
             "Enter QR Code",
             "qr-code-outline"
-          )}
+          )} */}
+          <InputField
+            label="Account ID"
+            value={formData.numberValue}
+            onChangeValue={(t) => updateFormData("numberValue", t)}
+            placeholder="Enter Account ID"
+            iconName="keypad-outline"
+            keyboardType="number-pad"
+            maxLength={15}
+          />
+          <InputField
+            label="QR Code"
+            value={formData.qrValue}
+            onChangeValue={(t) => updateFormData("qrValue", t)}
+            placeholder="Enter QR Code"
+            iconName="qr-code-outline"
+          />
         </>
       );
     }
