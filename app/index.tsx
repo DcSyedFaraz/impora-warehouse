@@ -393,8 +393,13 @@ export default function ImporaUploadScreen() {
       const responseText = await response.text();
       console.log("responseText", responseText);
 
+      // Close Rücknahme modal first
       setRucknahmeModalVisible(false);
-      showModal("Antwort", responseText);
+
+      // Show response modal after a brief delay to ensure Rücknahme modal closes
+      setTimeout(() => {
+        showModal("Antwort", responseText);
+      }, 300);
 
       // Reset Rücknahme form
       setRucknahmeQrCode("");
@@ -808,6 +813,7 @@ export default function ImporaUploadScreen() {
     <>
       {selectedProduct ? renderMainContent() : renderProductSelection()}
       {!selectedProduct && renderRucknahmeModal()}
+      {renderModal()}
     </>
   );
 }
