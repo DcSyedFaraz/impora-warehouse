@@ -25,7 +25,7 @@ interface ModalState {
 }
 
 // Constants
-const APP_VERSION = "2.1.1";
+const APP_VERSION = "2.2.0";
 const LOGO_URL =
   "https://impora-hausnotruf.de/wp-content/uploads/2025/02/impora-hausnotruf-logo.webp";
 
@@ -108,6 +108,12 @@ export default function ImporaUploadScreen() {
     heading: "",
     message: "",
   });
+
+  // Rücknahme state
+  const [rucknahmeModalVisible, setRucknahmeModalVisible] = useState(false);
+  const [rucknahmeQrCode, setRucknahmeQrCode] = useState("");
+  const [rucknahmeBearbeiter, setRucknahmeBearbeiter] = useState("");
+  const [rucknahmeLoading, setRucknahmeLoading] = useState(false);
 
   // Utility functions
   const showModal = (heading: string, message: string) => {
@@ -360,6 +366,48 @@ export default function ImporaUploadScreen() {
     }
   };
 
+  // Rücknahme submit handler
+  const handleRucknahmeSubmit = async () => {
+    if (!rucknahmeQrCode.trim() || !rucknahmeBearbeiter.trim()) {
+      showModal("Fehlende Informationen", "Bitte füllen Sie alle Felder aus.");
+      return;
+    }
+
+    setRucknahmeLoading(true);
+
+    try {
+      const response = await fetch(
+        "https://hook.eu1.make.com/adlse6tyzwpvs1cv356xmxyfm7hvbicq",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            qrCode: rucknahmeQrCode,
+            bearbeiter: rucknahmeBearbeiter,
+          }),
+        }
+      );
+
+      const responseText = await response.text();
+      console.log("responseText", responseText);
+
+      setRucknahmeModalVisible(false);
+      showModal("Antwort", responseText);
+
+      // Reset Rücknahme form
+      setRucknahmeQrCode("");
+      setRucknahmeBearbeiter("");
+    } catch (error) {
+      const errorStr = error instanceof Error ? error.message : String(error);
+      console.error("Error during Rücknahme submission:", errorStr);
+      showModal("Error", "Daten konnten nicht übermittelt werden!");
+    } finally {
+      setRucknahmeLoading(false);
+    }
+  };
+
   // Render functions
   const renderProductSelection = () => (
     <SafeAreaView style={styles.safeArea}>
@@ -376,6 +424,12 @@ export default function ImporaUploadScreen() {
           onPress={() => handleProductChange("james_uhr")}
         >
           <Text style={styles.selectionButtonText}>JAMES Uhr</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.selectionButton, styles.rucknahmeButton]}
+          onPress={() => setRucknahmeModalVisible(true)}
+        >
+          <Text style={styles.selectionButtonText}>Rücknahme</Text>
         </TouchableOpacity>
         <Text style={styles.versionText}>Version {APP_VERSION}</Text>
       </View>
@@ -401,14 +455,14 @@ export default function ImporaUploadScreen() {
           ];
 
     return (
-      <View style={styles.selectionOptions}>
+      <View style={styles.formOptionsContainer}>
         {options.map((option) => (
           <TouchableOpacity
             key={option.key}
-            style={styles.selectionButton}
+            style={styles.formOptionButton}
             onPress={() => handleFormChange(option.key)}
           >
-            <Text style={styles.selectionButtonText}>{option.label}</Text>
+            <Text style={styles.formOptionButtonText}>{option.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -612,6 +666,92 @@ export default function ImporaUploadScreen() {
     </Modal>
   );
 
+  const renderRucknahmeModal = () => (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={rucknahmeModalVisible}
+      onRequestClose={() => setRucknahmeModalVisible(false)}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.rucknahmeModalContent}>
+          <Text style={styles.modalTitle}>Rücknahme</Text>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>QR Code</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons
+                name="qr-code-outline"
+                size={20}
+                color="#3E7BFA"
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="QR Code eingeben"
+                value={rucknahmeQrCode}
+                onChangeText={setRucknahmeQrCode}
+                placeholderTextColor="#A0A0A0"
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Bearbeiter</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons
+                name="person-outline"
+                size={20}
+                color="#3E7BFA"
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Bearbeiter eingeben"
+                value={rucknahmeBearbeiter}
+                onChangeText={setRucknahmeBearbeiter}
+                placeholderTextColor="#A0A0A0"
+              />
+            </View>
+          </View>
+
+          <View style={styles.rucknahmeButtonsContainer}>
+            <TouchableOpacity
+              style={styles.rucknahmeCancelButton}
+              onPress={() => setRucknahmeModalVisible(false)}
+              disabled={rucknahmeLoading}
+            >
+              <Text style={styles.rucknahmeCancelButtonText}>Abbrechen</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.rucknahmeSubmitButton,
+                rucknahmeLoading && styles.sendButtonDisabled,
+              ]}
+              onPress={handleRucknahmeSubmit}
+              disabled={rucknahmeLoading}
+            >
+              {rucknahmeLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons
+                    name="send"
+                    size={20}
+                    color="#FFFFFF"
+                    style={styles.sendIcon}
+                  />
+                  <Text style={styles.sendButtonText}>Senden</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   const renderMainContent = () => (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -659,11 +799,17 @@ export default function ImporaUploadScreen() {
         </View>
       </ScrollView>
       {renderModal()}
+      {renderRucknahmeModal()}
     </SafeAreaView>
   );
 
   // Main render
-  return selectedProduct ? renderMainContent() : renderProductSelection();
+  return (
+    <>
+      {selectedProduct ? renderMainContent() : renderProductSelection()}
+      {!selectedProduct && renderRucknahmeModal()}
+    </>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -709,6 +855,24 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
+  },
+  formOptionsContainer: {
+    flexDirection: "column",
+    gap: 12,
+    marginBottom: 20,
+  },
+  formOptionButton: {
+    width: "100%",
+    paddingVertical: 16,
+    backgroundColor: "#3E7BFA",
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  formOptionButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
   },
   menuButton: {
     position: "absolute",
@@ -885,5 +1049,49 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
+  },
+  rucknahmeButton: {
+    backgroundColor: "#FF9500",
+  },
+  rucknahmeModalContent: {
+    width: "90%",
+    backgroundColor: "#fff",
+    padding: 24,
+    borderRadius: 16,
+    alignItems: "stretch",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  rucknahmeButtonsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+    marginTop: 20,
+    width: "100%",
+  },
+  rucknahmeCancelButton: {
+    flex: 1,
+    backgroundColor: "#E0E0E0",
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rucknahmeCancelButtonText: {
+    color: "#333",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  rucknahmeSubmitButton: {
+    flex: 1,
+    flexDirection: "row",
+    backgroundColor: "#3E7BFA",
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
