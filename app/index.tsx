@@ -25,7 +25,7 @@ interface ModalState {
 }
 
 // Constants
-const APP_VERSION = "2.2.0";
+const APP_VERSION = "2.2.1";
 const LOGO_URL =
   "https://impora-hausnotruf.de/wp-content/uploads/2025/02/impora-hausnotruf-logo.webp";
 
@@ -113,6 +113,7 @@ export default function ImporaUploadScreen() {
   const [rucknahmeModalVisible, setRucknahmeModalVisible] = useState(false);
   const [rucknahmeQrCode, setRucknahmeQrCode] = useState("");
   const [rucknahmeBearbeiter, setRucknahmeBearbeiter] = useState("");
+  const [rucknahmeNotizen, setRucknahmeNotizen] = useState("");
   const [rucknahmeLoading, setRucknahmeLoading] = useState(false);
 
   // Utility functions
@@ -386,24 +387,31 @@ export default function ImporaUploadScreen() {
           body: JSON.stringify({
             qrCode: rucknahmeQrCode,
             bearbeiter: rucknahmeBearbeiter,
+            notizen: rucknahmeNotizen,
           }),
         }
       );
 
       const responseText = await response.text();
       console.log("responseText", responseText);
+      console.log("response.status", response.status);
 
       // Close Rücknahme modal first
       setRucknahmeModalVisible(false);
 
       // Show response modal after a brief delay to ensure Rücknahme modal closes
       setTimeout(() => {
-        showModal("Antwort", responseText);
+        if (response.status === 200) {
+          showModal("Erfolgreich", responseText);
+        } else {
+          showModal("Antwort", responseText);
+        }
       }, 300);
 
       // Reset Rücknahme form
       setRucknahmeQrCode("");
       setRucknahmeBearbeiter("");
+      setRucknahmeNotizen("");
     } catch (error) {
       const errorStr = error instanceof Error ? error.message : String(error);
       console.error("Error during Rücknahme submission:", errorStr);
@@ -654,12 +662,18 @@ export default function ImporaUploadScreen() {
         <View style={styles.modalContent}>
           <Ionicons
             name={
-              modal.heading === "Daten übermittelt"
+              modal.heading === "Daten übermittelt" ||
+              modal.heading === "Erfolgreich"
                 ? "checkmark-circle"
                 : "close-circle"
             }
             size={50}
-            color={modal.heading === "Daten übermittelt" ? "green" : "red"}
+            color={
+              modal.heading === "Daten übermittelt" ||
+              modal.heading === "Erfolgreich"
+                ? "green"
+                : "red"
+            }
           />
           <Text style={styles.modalTitle}>{modal.heading}</Text>
           <Text style={styles.modalText}>{modal.message}</Text>
@@ -716,6 +730,28 @@ export default function ImporaUploadScreen() {
                 value={rucknahmeBearbeiter}
                 onChangeText={setRucknahmeBearbeiter}
                 placeholderTextColor="#A0A0A0"
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Notizen</Text>
+            <View style={[styles.inputWrapper, styles.textAreaWrapper]}>
+              <Ionicons
+                name="document-text-outline"
+                size={20}
+                color="#3E7BFA"
+                style={[styles.inputIcon, styles.textAreaIcon]}
+              />
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Notizen eingeben (optional)"
+                value={rucknahmeNotizen}
+                onChangeText={setRucknahmeNotizen}
+                placeholderTextColor="#A0A0A0"
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
               />
             </View>
           </View>
@@ -1099,5 +1135,17 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
+  },
+  textAreaWrapper: {
+    minHeight: 100,
+    alignItems: "flex-start",
+  },
+  textAreaIcon: {
+    paddingTop: 12,
+  },
+  textArea: {
+    minHeight: 100,
+    paddingTop: 12,
+    paddingBottom: 12,
   },
 });
