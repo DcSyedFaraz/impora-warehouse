@@ -869,7 +869,20 @@ export default function ImporaUploadScreen() {
     >
       <View style={styles.modalContainer}>
         <View style={styles.rucknahmeModalContent}>
-          <Text style={styles.modalTitle}>Rücknahme</Text>
+          <View style={styles.rucknahmeModalHeader}>
+            <Text style={styles.modalTitle}>Rücknahme</Text>
+            <TouchableOpacity
+              style={styles.labelErzeugenIconButton}
+              onPress={() => {
+                setRucknahmeModalVisible(false);
+                setTimeout(() => {
+                  setLabelErzeugenModalVisible(true);
+                }, 300);
+              }}
+            >
+              <Text style={styles.labelErzeugenButtonText}>Label erzeugen</Text>
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>QR Code</Text>
@@ -1396,6 +1409,23 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 8,
+  },
+  rucknahmeModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  labelErzeugenIconButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: "#F0F9F4",
+  },
+  labelErzeugenButtonText: {
+    color: "#34C759",
+    fontSize: 14,
+    fontWeight: "600",
   },
   rucknahmeButtonsContainer: {
     flexDirection: "row",
