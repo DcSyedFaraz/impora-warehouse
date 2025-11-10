@@ -115,6 +115,11 @@ export default function ImporaUploadScreen() {
   const [rucknahmeBearbeiter, setRucknahmeBearbeiter] = useState("");
   const [rucknahmeNotizen, setRucknahmeNotizen] = useState("");
   const [rucknahmeLoading, setRucknahmeLoading] = useState(false);
+  const [rucknahmeImages, setRucknahmeImages] = useState<(string | null)[]>([
+    null,
+    null,
+    null,
+  ]);
 
   // Utility functions
   const showModal = (heading: string, message: string) => {
@@ -186,6 +191,32 @@ export default function ImporaUploadScreen() {
 
   const removeImage = (imageKey: "imageUri1" | "imageUri2") => {
     setImages((prev) => ({ ...prev, [imageKey]: null }));
+  };
+
+  // Rücknahme image handling
+  const pickRucknahmeImage = async (index: number) => {
+    if (!(await requestImagePermission())) return;
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: false,
+      quality: 1,
+    });
+
+    if (!result.canceled && result.assets?.[0]) {
+      setRucknahmeImages((prev) => {
+        const newImages = [...prev];
+        newImages[index] = result.assets[0].uri;
+        return newImages;
+      });
+    }
+  };
+
+  const removeRucknahmeImage = (index: number) => {
+    setRucknahmeImages((prev) => {
+      const newImages = [...prev];
+      newImages[index] = null;
+      return newImages;
+    });
   };
 
   // Validation
@@ -367,6 +398,55 @@ export default function ImporaUploadScreen() {
     }
   };
 
+  // Upload Rücknahme images
+  const uploadRucknahmeImages = async (): Promise<string[]> => {
+    const imagesToUpload = rucknahmeImages.filter((img) => img !== null);
+    if (imagesToUpload.length === 0) {
+      return [];
+    }
+
+    const formData = new FormData();
+
+    imagesToUpload.forEach((imageUri, idx) => {
+      const imageInfo = {
+        uri: imageUri,
+        name: `rucknahme_image${idx + 1}.jpg`,
+        type: "image/jpeg",
+      };
+      formData.append("image[]", imageInfo as any);
+    });
+
+    console.log("Uploading Rücknahme images:", imagesToUpload.length);
+
+    const auth =
+      "Basic " +
+      btoa(
+        `${API_CONFIG.credentials.username}:${API_CONFIG.credentials.password}`
+      );
+
+    const response = await fetch(API_CONFIG.imageUploadEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "multipart/form-data",
+        Authorization: auth,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Image upload failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log("Rücknahme image upload response:", result);
+
+    if (!result.success || !result.urls) {
+      throw new Error("Image upload failed - invalid response format");
+    }
+
+    return result.urls;
+  };
+
   // Rücknahme submit handler
   const handleRucknahmeSubmit = async () => {
     if (!rucknahmeQrCode.trim() || !rucknahmeBearbeiter.trim()) {
@@ -377,6 +457,20 @@ export default function ImporaUploadScreen() {
     setRucknahmeLoading(true);
 
     try {
+      // Upload images first if any exist
+      const uploadedImageUrls = await uploadRucknahmeImages();
+
+      const payload: any = {
+        qrCode: rucknahmeQrCode,
+        bearbeiter: rucknahmeBearbeiter,
+        notizen: rucknahmeNotizen,
+      };
+
+      // Add image URLs to payload if any were uploaded
+      if (uploadedImageUrls.length > 0) {
+        payload.images = uploadedImageUrls;
+      }
+
       const response = await fetch(
         "https://hook.eu1.make.com/adlse6tyzwpvs1cv356xmxyfm7hvbicq",
         {
@@ -384,11 +478,7 @@ export default function ImporaUploadScreen() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            qrCode: rucknahmeQrCode,
-            bearbeiter: rucknahmeBearbeiter,
-            notizen: rucknahmeNotizen,
-          }),
+          body: JSON.stringify(payload),
         }
       );
 
@@ -396,22 +486,33 @@ export default function ImporaUploadScreen() {
       console.log("responseText", responseText);
       console.log("response.status", response.status);
 
-      // Close Rücknahme modal first
-      setRucknahmeModalVisible(false);
+      // Handle 400 error - keep modal open with data, preserve all fields and images
+      if (response.status === 400) {
+        showModal("Fehler", responseText);
+        setRucknahmeLoading(false); // Stop loading state
+        return; // Don't close modal or reset form - keep all data
+      }
 
-      // Show response modal after a brief delay to ensure Rücknahme modal closes
-      setTimeout(() => {
-        if (response.status === 200) {
-          showModal("Erfolgreich", responseText);
-        } else {
+      // Only proceed with success handling for 200 status
+      if (response.status === 200) {
+        // Close Rücknahme modal first
+        setRucknahmeModalVisible(false);
+
+        // Show response modal after a brief delay to ensure Rücknahme modal closes
+        setTimeout(() => {
           showModal("Antwort", responseText);
-        }
-      }, 300);
+        }, 300);
 
-      // Reset Rücknahme form
-      setRucknahmeQrCode("");
-      setRucknahmeBearbeiter("");
-      setRucknahmeNotizen("");
+        // Reset Rücknahme form only on success
+        setRucknahmeQrCode("");
+        setRucknahmeBearbeiter("");
+        setRucknahmeNotizen("");
+        setRucknahmeImages([null, null, null]);
+      } else {
+        // For other error statuses, show error but keep form data
+        showModal("Fehler", responseText);
+        setRucknahmeLoading(false);
+      }
     } catch (error) {
       const errorStr = error instanceof Error ? error.message : String(error);
       console.error("Error during Rücknahme submission:", errorStr);
@@ -753,6 +854,49 @@ export default function ImporaUploadScreen() {
                 numberOfLines={4}
                 textAlignVertical="top"
               />
+            </View>
+          </View>
+
+          {/* Image upload section */}
+          <View style={styles.rucknahmeImagesSection}>
+            <Text style={styles.inputLabel}>Bilder (Optional)</Text>
+            <View style={styles.rucknahmeImagesGrid}>
+              {rucknahmeImages.map((imageUri, index) => (
+                <View key={index} style={styles.rucknahmeImageSlot}>
+                  {imageUri ? (
+                    <View style={styles.rucknahmeImageContainer}>
+                      <Image
+                        source={{ uri: imageUri }}
+                        style={styles.rucknahmePreviewImage}
+                      />
+                      <TouchableOpacity
+                        style={styles.rucknahmeRemoveImageButton}
+                        onPress={() => removeRucknahmeImage(index)}
+                      >
+                        <Ionicons
+                          name="close-circle"
+                          size={24}
+                          color="#FF3B30"
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.rucknahmeUploadButton}
+                      onPress={() => pickRucknahmeImage(index)}
+                    >
+                      <Ionicons
+                        name="camera-outline"
+                        size={32}
+                        color="#3E7BFA"
+                      />
+                      <Text style={styles.rucknahmeUploadText}>
+                        Bild {index + 1}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
             </View>
           </View>
 
@@ -1147,5 +1291,53 @@ const styles = StyleSheet.create({
     minHeight: 100,
     paddingTop: 12,
     paddingBottom: 12,
+  },
+  rucknahmeImagesSection: {
+    marginBottom: 20,
+  },
+  rucknahmeImagesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    justifyContent: "space-between",
+  },
+  rucknahmeImageSlot: {
+    width: "30%",
+    aspectRatio: 1,
+  },
+  rucknahmeUploadButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: "#3E7BFA",
+    borderRadius: 8,
+    backgroundColor: "#F0F7FF",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 10,
+  },
+  rucknahmeUploadText: {
+    fontSize: 12,
+    color: "#3E7BFA",
+    fontWeight: "600",
+    marginTop: 4,
+    textAlign: "center",
+  },
+  rucknahmeImageContainer: {
+    position: "relative",
+    flex: 1,
+  },
+  rucknahmePreviewImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 8,
+  },
+  rucknahmeRemoveImageButton: {
+    position: "absolute",
+    top: -8,
+    right: -8,
+    backgroundColor: "white",
+    borderRadius: 12,
+    padding: 2,
   },
 });
