@@ -505,7 +505,7 @@ export default function ImporaUploadScreen() {
 
         // Show response modal after a brief delay to ensure Rücknahme modal closes
         setTimeout(() => {
-          showModal("Antwort", responseText);
+          showModal("Erfolgreich", responseText);
         }, 300);
 
         // Reset Rücknahme form only on success
