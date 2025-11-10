@@ -121,6 +121,11 @@ export default function ImporaUploadScreen() {
     null,
   ]);
 
+  // Label erzeugen state
+  const [labelErzeugenModalVisible, setLabelErzeugenModalVisible] = useState(false);
+  const [labelErzeugenQrCode, setLabelErzeugenQrCode] = useState("");
+  const [labelErzeugenLoading, setLabelErzeugenLoading] = useState(false);
+
   // Utility functions
   const showModal = (heading: string, message: string) => {
     setModal({ visible: true, heading, message });
@@ -522,11 +527,80 @@ export default function ImporaUploadScreen() {
     }
   };
 
+  // Label erzeugen submit handler
+  const handleLabelErzeugenSubmit = async () => {
+    if (!labelErzeugenQrCode.trim()) {
+      showModal("Fehlende Informationen", "Bitte geben Sie einen QR Code ein.");
+      return;
+    }
+
+    setLabelErzeugenLoading(true);
+
+    try {
+      const payload = {
+        qrCode: labelErzeugenQrCode,
+        label_erzeugen: true,
+      };
+
+      const response = await fetch(
+        "https://hook.eu1.make.com/adlse6tyzwpvs1cv356xmxyfm7hvbicq",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const responseText = await response.text();
+      console.log("Label erzeugen responseText", responseText);
+      console.log("Label erzeugen response.status", response.status);
+
+      // Handle 400 error - keep modal open with data
+      if (response.status === 400) {
+        showModal("Fehler", responseText);
+        setLabelErzeugenLoading(false); // Stop loading state
+        return; // Don't close modal or reset form - keep all data
+      }
+
+      // Handle 200 success - close modal and go to main page
+      if (response.status === 200) {
+        // Close Label erzeugen modal first
+        setLabelErzeugenModalVisible(false);
+
+        // Show response modal after a brief delay to ensure modal closes
+        setTimeout(() => {
+          showModal("Erfolgreich", responseText);
+        }, 300);
+
+        // Reset form only on success
+        setLabelErzeugenQrCode("");
+      } else {
+        // For other error statuses, show error but keep form data
+        showModal("Fehler", responseText);
+        setLabelErzeugenLoading(false);
+      }
+    } catch (error) {
+      const errorStr = error instanceof Error ? error.message : String(error);
+      console.error("Error during Label erzeugen submission:", errorStr);
+      showModal("Error", "Daten konnten nicht übermittelt werden!");
+    } finally {
+      setLabelErzeugenLoading(false);
+    }
+  };
+
   // Render functions
   const renderProductSelection = () => (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.selectionContainer}>
         <Image source={{ uri: LOGO_URL }} style={styles.selectionLogo} />
+        <TouchableOpacity
+          style={[styles.selectionButton, styles.labelErzeugenButton]}
+          onPress={() => setLabelErzeugenModalVisible(true)}
+        >
+          <Text style={styles.selectionButtonText}>Label erzeugen</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.selectionButton}
           onPress={() => handleProductChange("basisstation")}
@@ -937,6 +1011,73 @@ export default function ImporaUploadScreen() {
     </Modal>
   );
 
+  const renderLabelErzeugenModal = () => (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={labelErzeugenModalVisible}
+      onRequestClose={() => setLabelErzeugenModalVisible(false)}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.rucknahmeModalContent}>
+          <Text style={styles.modalTitle}>Label erzeugen</Text>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>QR Code</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons
+                name="qr-code-outline"
+                size={20}
+                color="#3E7BFA"
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="QR Code eingeben"
+                value={labelErzeugenQrCode}
+                onChangeText={setLabelErzeugenQrCode}
+                placeholderTextColor="#A0A0A0"
+              />
+            </View>
+          </View>
+
+          <View style={styles.rucknahmeButtonsContainer}>
+            <TouchableOpacity
+              style={styles.rucknahmeCancelButton}
+              onPress={() => setLabelErzeugenModalVisible(false)}
+              disabled={labelErzeugenLoading}
+            >
+              <Text style={styles.rucknahmeCancelButtonText}>Abbrechen</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.rucknahmeSubmitButton,
+                labelErzeugenLoading && styles.sendButtonDisabled,
+              ]}
+              onPress={handleLabelErzeugenSubmit}
+              disabled={labelErzeugenLoading}
+            >
+              {labelErzeugenLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons
+                    name="send"
+                    size={20}
+                    color="#FFFFFF"
+                    style={styles.sendIcon}
+                  />
+                  <Text style={styles.sendButtonText}>Senden</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   const renderMainContent = () => (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -985,6 +1126,7 @@ export default function ImporaUploadScreen() {
       </ScrollView>
       {renderModal()}
       {renderRucknahmeModal()}
+      {renderLabelErzeugenModal()}
     </SafeAreaView>
   );
 
@@ -993,6 +1135,7 @@ export default function ImporaUploadScreen() {
     <>
       {selectedProduct ? renderMainContent() : renderProductSelection()}
       {!selectedProduct && renderRucknahmeModal()}
+      {!selectedProduct && renderLabelErzeugenModal()}
       {renderModal()}
     </>
   );
@@ -1238,6 +1381,9 @@ const styles = StyleSheet.create({
   },
   rucknahmeButton: {
     backgroundColor: "#FF9500",
+  },
+  labelErzeugenButton: {
+    backgroundColor: "#34C759",
   },
   rucknahmeModalContent: {
     width: "90%",
