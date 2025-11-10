@@ -595,12 +595,12 @@ export default function ImporaUploadScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.selectionContainer}>
         <Image source={{ uri: LOGO_URL }} style={styles.selectionLogo} />
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={[styles.selectionButton, styles.labelErzeugenButton]}
           onPress={() => setLabelErzeugenModalVisible(true)}
         >
           <Text style={styles.selectionButtonText}>Label erzeugen</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
         <TouchableOpacity
           style={styles.selectionButton}
           onPress={() => handleProductChange("basisstation")}
