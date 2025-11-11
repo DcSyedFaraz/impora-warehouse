@@ -2,14 +2,15 @@
   "expo": {
     "name": "IMPORA Warehouse",
     "slug": "impora",
-    "version": "2.2.2",
+    "version": "2.2.4",
     "orientation": "portrait",
     "icon": "./assets/images/adaptive-icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sfaraz.impora"
     },
     "android": {
       "adaptiveIcon": {

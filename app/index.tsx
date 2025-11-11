@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 // Types
 type ProductType = "basisstation" | "james_uhr";
@@ -25,7 +26,7 @@ interface ModalState {
 }
 
 // Constants
-const APP_VERSION = "2.2.2";
+const APP_VERSION = "2.2.4";
 const LOGO_URL =
   "https://impora-hausnotruf.de/wp-content/uploads/2025/02/impora-hausnotruf-logo.webp";
 
@@ -88,6 +89,8 @@ const InputField = memo(
 );
 
 export default function ImporaUploadScreen() {
+  const router = useRouter();
+
   // State management
   const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(
     null
@@ -108,18 +111,6 @@ export default function ImporaUploadScreen() {
     heading: "",
     message: "",
   });
-
-  // Rücknahme state
-  const [rucknahmeModalVisible, setRucknahmeModalVisible] = useState(false);
-  const [rucknahmeQrCode, setRucknahmeQrCode] = useState("");
-  const [rucknahmeBearbeiter, setRucknahmeBearbeiter] = useState("");
-  const [rucknahmeNotizen, setRucknahmeNotizen] = useState("");
-  const [rucknahmeLoading, setRucknahmeLoading] = useState(false);
-  const [rucknahmeImages, setRucknahmeImages] = useState<(string | null)[]>([
-    null,
-    null,
-    null,
-  ]);
 
   // Label erzeugen state
   const [labelErzeugenModalVisible, setLabelErzeugenModalVisible] = useState(false);
@@ -196,32 +187,6 @@ export default function ImporaUploadScreen() {
 
   const removeImage = (imageKey: "imageUri1" | "imageUri2") => {
     setImages((prev) => ({ ...prev, [imageKey]: null }));
-  };
-
-  // Rücknahme image handling
-  const pickRucknahmeImage = async (index: number) => {
-    if (!(await requestImagePermission())) return;
-
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: false,
-      quality: 1,
-    });
-
-    if (!result.canceled && result.assets?.[0]) {
-      setRucknahmeImages((prev) => {
-        const newImages = [...prev];
-        newImages[index] = result.assets[0].uri;
-        return newImages;
-      });
-    }
-  };
-
-  const removeRucknahmeImage = (index: number) => {
-    setRucknahmeImages((prev) => {
-      const newImages = [...prev];
-      newImages[index] = null;
-      return newImages;
-    });
   };
 
   // Validation
@@ -403,129 +368,6 @@ export default function ImporaUploadScreen() {
     }
   };
 
-  // Upload Rücknahme images
-  const uploadRucknahmeImages = async (): Promise<string[]> => {
-    const imagesToUpload = rucknahmeImages.filter((img) => img !== null);
-    if (imagesToUpload.length === 0) {
-      return [];
-    }
-
-    const formData = new FormData();
-
-    imagesToUpload.forEach((imageUri, idx) => {
-      const imageInfo = {
-        uri: imageUri,
-        name: `rucknahme_image${idx + 1}.jpg`,
-        type: "image/jpeg",
-      };
-      formData.append("image[]", imageInfo as any);
-    });
-
-    console.log("Uploading Rücknahme images:", imagesToUpload.length);
-
-    const auth =
-      "Basic " +
-      btoa(
-        `${API_CONFIG.credentials.username}:${API_CONFIG.credentials.password}`
-      );
-
-    const response = await fetch(API_CONFIG.imageUploadEndpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "multipart/form-data",
-        Authorization: auth,
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Image upload failed: ${response.status}`);
-    }
-
-    const result = await response.json();
-    console.log("Rücknahme image upload response:", result);
-
-    if (!result.success || !result.urls) {
-      throw new Error("Image upload failed - invalid response format");
-    }
-
-    return result.urls;
-  };
-
-  // Rücknahme submit handler
-  const handleRucknahmeSubmit = async () => {
-    if (!rucknahmeQrCode.trim() || !rucknahmeBearbeiter.trim()) {
-      showModal("Fehlende Informationen", "Bitte füllen Sie alle Felder aus.");
-      return;
-    }
-
-    setRucknahmeLoading(true);
-
-    try {
-      // Upload images first if any exist
-      const uploadedImageUrls = await uploadRucknahmeImages();
-
-      const payload: any = {
-        qrCode: rucknahmeQrCode,
-        bearbeiter: rucknahmeBearbeiter,
-        notizen: rucknahmeNotizen,
-      };
-
-      // Add image URLs to payload if any were uploaded
-      if (uploadedImageUrls.length > 0) {
-        payload.images = uploadedImageUrls;
-      }
-
-      const response = await fetch(
-        "https://hook.eu1.make.com/adlse6tyzwpvs1cv356xmxyfm7hvbicq",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        }
-      );
-
-      const responseText = await response.text();
-      console.log("responseText", responseText);
-      console.log("response.status", response.status);
-
-      // Handle 400 error - keep modal open with data, preserve all fields and images
-      if (response.status === 400) {
-        showModal("Fehler", responseText);
-        setRucknahmeLoading(false); // Stop loading state
-        return; // Don't close modal or reset form - keep all data
-      }
-
-      // Only proceed with success handling for 200 status
-      if (response.status === 200) {
-        // Close Rücknahme modal first
-        setRucknahmeModalVisible(false);
-
-        // Show response modal after a brief delay to ensure Rücknahme modal closes
-        setTimeout(() => {
-          showModal("Erfolgreich", responseText);
-        }, 300);
-
-        // Reset Rücknahme form only on success
-        setRucknahmeQrCode("");
-        setRucknahmeBearbeiter("");
-        setRucknahmeNotizen("");
-        setRucknahmeImages([null, null, null]);
-      } else {
-        // For other error statuses, show error but keep form data
-        showModal("Fehler", responseText);
-        setRucknahmeLoading(false);
-      }
-    } catch (error) {
-      const errorStr = error instanceof Error ? error.message : String(error);
-      console.error("Error during Rücknahme submission:", errorStr);
-      showModal("Error", "Daten konnten nicht übermittelt werden!");
-    } finally {
-      setRucknahmeLoading(false);
-    }
-  };
 
   // Label erzeugen submit handler
   const handleLabelErzeugenSubmit = async () => {
@@ -615,7 +457,7 @@ export default function ImporaUploadScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.selectionButton, styles.rucknahmeButton]}
-          onPress={() => setRucknahmeModalVisible(true)}
+          onPress={() => router.push("./rucknahme")}
         >
           <Text style={styles.selectionButtonText}>Rücknahme</Text>
         </TouchableOpacity>
@@ -860,169 +702,6 @@ export default function ImporaUploadScreen() {
     </Modal>
   );
 
-  const renderRucknahmeModal = () => (
-    <Modal
-      animationType="slide"
-      transparent={true}
-      visible={rucknahmeModalVisible}
-      onRequestClose={() => setRucknahmeModalVisible(false)}
-    >
-      <View style={styles.modalContainer}>
-        <View style={styles.rucknahmeModalContent}>
-          <View style={styles.rucknahmeModalHeader}>
-            <Text style={styles.modalTitle}>Rücknahme</Text>
-            <TouchableOpacity
-              style={styles.labelErzeugenIconButton}
-              onPress={() => {
-                setRucknahmeModalVisible(false);
-                setTimeout(() => {
-                  setLabelErzeugenModalVisible(true);
-                }, 300);
-              }}
-            >
-              <Text style={styles.labelErzeugenButtonText}>Label erzeugen</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>QR Code</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons
-                name="qr-code-outline"
-                size={20}
-                color="#3E7BFA"
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="QR Code eingeben"
-                value={rucknahmeQrCode}
-                onChangeText={setRucknahmeQrCode}
-                placeholderTextColor="#A0A0A0"
-              />
-            </View>
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Bearbeiter</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons
-                name="person-outline"
-                size={20}
-                color="#3E7BFA"
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Bearbeiter eingeben"
-                value={rucknahmeBearbeiter}
-                onChangeText={setRucknahmeBearbeiter}
-                placeholderTextColor="#A0A0A0"
-              />
-            </View>
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Notizen</Text>
-            <View style={[styles.inputWrapper, styles.textAreaWrapper]}>
-              <Ionicons
-                name="document-text-outline"
-                size={20}
-                color="#3E7BFA"
-                style={[styles.inputIcon, styles.textAreaIcon]}
-              />
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Notizen eingeben (optional)"
-                value={rucknahmeNotizen}
-                onChangeText={setRucknahmeNotizen}
-                placeholderTextColor="#A0A0A0"
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
-          </View>
-
-          {/* Image upload section */}
-          <View style={styles.rucknahmeImagesSection}>
-            <Text style={styles.inputLabel}>Bilder (Optional)</Text>
-            <View style={styles.rucknahmeImagesGrid}>
-              {rucknahmeImages.map((imageUri, index) => (
-                <View key={index} style={styles.rucknahmeImageSlot}>
-                  {imageUri ? (
-                    <View style={styles.rucknahmeImageContainer}>
-                      <Image
-                        source={{ uri: imageUri }}
-                        style={styles.rucknahmePreviewImage}
-                      />
-                      <TouchableOpacity
-                        style={styles.rucknahmeRemoveImageButton}
-                        onPress={() => removeRucknahmeImage(index)}
-                      >
-                        <Ionicons
-                          name="close-circle"
-                          size={24}
-                          color="#FF3B30"
-                        />
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <TouchableOpacity
-                      style={styles.rucknahmeUploadButton}
-                      onPress={() => pickRucknahmeImage(index)}
-                    >
-                      <Ionicons
-                        name="camera-outline"
-                        size={32}
-                        color="#3E7BFA"
-                      />
-                      <Text style={styles.rucknahmeUploadText}>
-                        Bild {index + 1}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.rucknahmeButtonsContainer}>
-            <TouchableOpacity
-              style={styles.rucknahmeCancelButton}
-              onPress={() => setRucknahmeModalVisible(false)}
-              disabled={rucknahmeLoading}
-            >
-              <Text style={styles.rucknahmeCancelButtonText}>Abbrechen</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.rucknahmeSubmitButton,
-                rucknahmeLoading && styles.sendButtonDisabled,
-              ]}
-              onPress={handleRucknahmeSubmit}
-              disabled={rucknahmeLoading}
-            >
-              {rucknahmeLoading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <>
-                  <Ionicons
-                    name="send"
-                    size={20}
-                    color="#FFFFFF"
-                    style={styles.sendIcon}
-                  />
-                  <Text style={styles.sendButtonText}>Senden</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
 
   const renderLabelErzeugenModal = () => (
     <Modal
@@ -1138,7 +817,6 @@ export default function ImporaUploadScreen() {
         </View>
       </ScrollView>
       {renderModal()}
-      {renderRucknahmeModal()}
       {renderLabelErzeugenModal()}
     </SafeAreaView>
   );
@@ -1147,7 +825,6 @@ export default function ImporaUploadScreen() {
   return (
     <>
       {selectedProduct ? renderMainContent() : renderProductSelection()}
-      {!selectedProduct && renderRucknahmeModal()}
       {!selectedProduct && renderLabelErzeugenModal()}
       {renderModal()}
     </>
@@ -1399,9 +1076,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#34C759",
   },
   rucknahmeModalContent: {
-    width: "90%",
+    width: "80%",
+    maxHeight: "50%",
     backgroundColor: "#fff",
-    padding: 24,
+    padding: 16,
     borderRadius: 16,
     alignItems: "stretch",
     shadowColor: "#000",
@@ -1515,5 +1193,11 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderRadius: 12,
     padding: 2,
+  },
+  rucknahmeScrollView: {
+    maxHeight: "100%",
+  },
+  rucknahmeScrollContent: {
+    paddingBottom: 10,
   },
 });
