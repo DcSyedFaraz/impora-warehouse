@@ -65,7 +65,11 @@ export default function RucknahmeScreen() {
   };
 
   const hideModal = () => {
+    const wasSuccess = modal.heading === "Erfolgreich";
     setModal({ ...modal, visible: false });
+    if (wasSuccess) {
+      router.back();
+    }
   };
 
   // Image handling
@@ -209,10 +213,6 @@ export default function RucknahmeScreen() {
         setRucknahmeNotizen("");
         setRucknahmeImages([null, null, null]);
 
-        // Navigate back to home after showing success
-        setTimeout(() => {
-          router.back();
-        }, 2000);
       } else {
         // For other error statuses, show error but keep form data
         showModal("Fehler", responseText);
